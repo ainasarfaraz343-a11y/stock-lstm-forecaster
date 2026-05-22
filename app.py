@@ -4,62 +4,106 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import load_model
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
+from tensorflow.keras.optimizers import Adam
 
-st.set_page_config(page_title="Asset Forecaster", layout="wide")
-st.title("Enterprise Deep Learning Suite: Asset Trajectory")
+st.set_page_config(page_title="Stock Forecaster Pro", layout="wide")
 
-st.sidebar.header("🕹️ Model Controls")
-asset_ticker = st.sidebar.selectbox("Select Target Asset:", ["AAPL", "MSFT", "GOOGL"])
-forecast_days_slider = st.sidebar.slider("Select Horizon (Days Ahead):", min_value=1, max_value=7, value=7)
+st.title("Advanced Stock Price Prediction Dashboard")
+st.write("This dashboard trains a live Bidirectional LSTM model on real-time multivariate technical data to project a 7-day future horizon path.")
 
-@st.cache_data(ttl=3600)
-def get_market_data(ticker):
-    raw_asset = yf.download(ticker, start='2018-01-01', end='2026-05-23')
-    raw_macro = yf.download('SPY', start='2018-01-01', end='2026-05-23')
-    processed_df = raw_asset[['Open', 'High', 'Low', 'Volume', 'Close']].copy()
-    processed_df['Market_Index_Proxy'] = raw_macro['Close']
-    processed_df['MA14'] = processed_df['Close'].rolling(window=14).mean()
-    processed_df['Historical_Volatility'] = processed_df['Close'].pct_change().rolling(window=10).std()
-    processed_df.dropna(inplace=True)
-    return processed_df
+# Sidebar Configuration Settings
+st.sidebar.header("Model Configuration")
+ticker = st.sidebar.text_input("Enter Stock Ticker Symbol (e.g., AAPL, TSLA, MSFT):", value="AAPL").upper()
+lookback_days = st.sidebar.slider("Historical Lookback Window (Days):", min_value=30, max_value=90, value=60)
+epochs_count = st.sidebar.slider("Training Optimization Epochs:", min_value=5, max_value=25, value=15)
 
-with st.spinner("Fetching Live Market Data..."):
-    df = get_market_data(asset_ticker)
-
-scaler_x = MinMaxScaler(feature_range=(0, 1))
-scaler_y = MinMaxScaler(feature_range=(0, 1))
-scaled_features = scaler_x.fit_transform(df.values)
-scaled_target = scaler_y.fit_transform(df[['Close']].values)
-
-@st.cache_resource
-def load_saved_nn_weights():
-    return load_model("deep_model.h5", compile=False)
-
-net_engine = load_saved_nn_weights()
-
-LOOKBACK_WINDOWS = 60
-terminal_window = scaled_features[-LOOKBACK_WINDOWS:]
-terminal_window = np.expand_dims(terminal_window, axis=0)
-
-live_future_scaled = net_engine.predict(terminal_window)
-live_future_unscaled = scaler_y.inverse_transform(live_future_scaled)
-filtered_predictions = live_future_unscaled[0][:forecast_days_slider]
-
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("Dynamic Trajectory Chart")
-    fig, ax = plt.subplots(figsize=(10, 4.5))
-    ax.plot(range(1, forecast_days_slider + 1), filtered_predictions, marker='o', color='darkmagenta', linewidth=2.5)
-    ax.set_xticks(range(1, forecast_days_slider + 1))
-    ax.set_xticklabels([f"Day {i}" for i in range(1, forecast_days_slider + 1)])
-    ax.grid(True, linestyle=':', alpha=0.6)
-    st.pyplot(fig)
-
-with col2:
-    st.subheader("Calculated Prediction Metrics View")
-    results_table = pd.DataFrame({
-        "Sequence Target Index": [f"Day {i}" for i in range(1, forecast_days_slider + 1)],
-        "Predicted Valuation ($)": [f"${price:.2f}" for price in filtered_predictions]
-    })
-    st.dataframe(results_table, use_container_width=True)
+if st.sidebar.button("Train Model & Forecast Future Horizon"):
+    with st.spinner(f"Sourcing live feeds and optimizing neural network weights for {ticker}... Please wait."):
+        
+        # 1. Fetch Asset Data and S&P 500 Macro Proxy simultaneously
+        raw_asset = yf.download(ticker, start='2018-01-01')
+        raw_macro = yf.download('SPY', start='2018-01-01')
+        
+        if raw_asset.empty or raw_macro.empty:
+            st.error("Invalid Ticker Symbol or Data Fetch Failure! Please check the input framework.")
+        else:
+            # 2. Syncing Datasets and Technical Feature Engineering
+            df_pro = raw_asset[['Open', 'High', 'Low', 'Volume', 'Close']].copy()
+            df_pro['Market_Close'] = raw_macro['Close']
+            
+            # 14-Day Simple Moving Average for trend velocity mapping
+            df_pro['MA14'] = df_pro['Close'].rolling(window=14).mean()
+            # 10-Day historical returns standard deviation for active volatility scoring
+            df_pro['Volatility'] = df_pro['Close'].pct_change().rolling(window=10).std()
+            df_pro.dropna(inplace=True)
+            
+            # Display live preview data panel
+            st.subheader(f"Live Multivariate Technical Feed Preview ({ticker})")
+            st.dataframe(df_pro.tail(5))
+            
+            # 3. Multi-Variate Scaling Layout Matrix
+            dataset_pro = df_pro.values
+            scaler_features = MinMaxScaler(feature_range=(0, 1))
+            scaled_features = scaler_features.fit_transform(dataset_pro)
+            
+            scaler_target = MinMaxScaler(feature_range=(0, 1))
+            scaled_target = scaler_target.fit_transform(df_pro[['Close']].values)
+            
+            FORECAST_DAYS = 7
+            
+            # 4. Building 3D Tensor Window Sequences
+            X_pro, y_pro = [], []
+            for i in range(lookback_days, len(scaled_features) - FORECAST_DAYS + 1):
+                X_pro.append(scaled_features[i-lookback_days:i])
+                y_pro.append(scaled_target[i:i+FORECAST_DAYS, 0])
+                
+            X_pro, y_pro = np.array(X_pro), np.array(y_pro)
+            
+            # 5. Compile and Synthesize Bidirectional LSTM Network Architecture
+            live_network = Sequential([
+                Bidirectional(LSTM(units=90, return_sequences=True), input_shape=(X_pro.shape[1], X_pro.shape[2])),
+                Dropout(0.2),
+                LSTM(units=60, return_sequences=False),
+                Dropout(0.2),
+                Dense(units=32, activation='relu'),
+                Dense(units=FORECAST_DAYS)
+            ])
+            
+            live_network.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
+            
+            # Live Training execution step
+            live_network.fit(X_pro, y_pro, epochs=epochs_count, batch_size=32, verbose=0)
+            
+            # 6. Extrapolating Future Horizon (Next 7 Trading Days)
+            terminal_window = scaled_features[-lookback_days:]
+            terminal_window = np.expand_dims(terminal_window, axis=0)
+            
+            future_prediction_scaled = live_network.predict(terminal_window)
+            future_prices = scaler_target.inverse_transform(future_prediction_scaled)[0]
+            
+            # 7. Rendering Dynamic Web Metrics Dashboards
+            st.success("Neural optimization cycle finalized successfully!")
+            
+            current_close = float(df_pro['Close'].iloc[-1])
+            tomorrow_est = float(future_prices[0])
+            price_delta = tomorrow_est - current_close
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Current Asset Close", f"${current_close:.2f}")
+            m2.metric("Predicted Tomorrow", f"${tomorrow_est:.2f}")
+            m3.metric("Expected Next-Day Movement", f"${price_delta:.2f}", delta=f"{price_delta:.2f}")
+            
+            # 8. Rendering Clean Trajectory Path Graphs
+            st.subheader(f"Predicted 7-Day Asset Trajectory Future Horizon ({ticker})")
+            fig, ax = plt.subplots(figsize=(10, 4.5))
+            ax.plot(range(1, 8), future_prices, marker='o', color='purple', linewidth=2.5, label='LSTM Predicted Path Vector')
+            ax.set_xlabel("Days Ahead (Future Horizon Index Space)")
+            ax.set_ylabel("Theoretical Valuations ($)")
+            ax.set_xticks(range(1, 8))
+            ax.set_xticklabels([f"Day {i}" for i in range(1, 8)])
+            ax.grid(True, linestyle=':', alpha=0.6)
+            ax.legend(loc='best')
+            st.pyplot(fig)
+use_container_width=True)
