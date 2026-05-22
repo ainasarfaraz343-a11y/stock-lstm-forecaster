@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import load_model
 
 st.set_page_config(page_title="Asset Forecaster", layout="wide")
-st.title("📈 Enterprise Deep Learning Suite: Asset Trajectory")
+st.title("Enterprise Deep Learning Suite: Asset Trajectory")
 
 st.sidebar.header("🕹️ Model Controls")
 asset_ticker = st.sidebar.selectbox("Select Target Asset:", ["AAPL", "MSFT", "GOOGL"])
@@ -34,7 +34,7 @@ scaled_target = scaler_y.fit_transform(df[['Close']].values)
 
 @st.cache_resource
 def load_saved_nn_weights():
-    return load_model("deep_model.h5")
+    return load_model("deep_model.h5", compile=False)
 
 net_engine = load_saved_nn_weights()
 
