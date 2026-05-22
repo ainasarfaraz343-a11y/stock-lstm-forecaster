@@ -95,7 +95,7 @@ if st.sidebar.button("Train Model & Forecast Future Horizon"):
             m2.metric("Predicted Tomorrow", f"${tomorrow_est:.2f}")
             m3.metric("Expected Next-Day Movement", f"${price_delta:.2f}", delta=f"{price_delta:.2f}")
             
-            # 8. Rendering Clean Trajectory Path Graphs
+                       # 8. Rendering Clean Trajectory Path Graphs
             st.subheader(f"Predicted 7-Day Asset Trajectory Future Horizon ({ticker})")
             fig, ax = plt.subplots(figsize=(10, 4.5))
             ax.plot(range(1, 8), future_prices, marker='o', color='purple', linewidth=2.5, label='LSTM Predicted Path Vector')
@@ -106,4 +106,4 @@ if st.sidebar.button("Train Model & Forecast Future Horizon"):
             ax.grid(True, linestyle=':', alpha=0.6)
             ax.legend(loc='best')
             st.pyplot(fig)
-use_container_width=True)
+
